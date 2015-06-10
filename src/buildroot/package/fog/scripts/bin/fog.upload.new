@@ -1,0 +1,213 @@
+#!/bin/bash
+
+# SCRIPT NAME: fog.upload
+# SCRIPT DESCRIPTION: Uploads image found on the client to the server
+
+### BEGIN FUNCTION INCLUDES
+. /usr/share/fog/lib/funcs.sh
+. /bin/fog.checkin
+### END FUNCTION INCLUDES
+
+### BEGIN VARIABLES
+imagePath="/images/$macWinSafe"
+percent=$pct
+### END VARIABLES
+
+### BEGIN FUNCTIONS
+# Update the percentage variable in case of strange cases
+# No arguments expected
+function updatePercent() {
+	if [ $percent -lt 5 ] || [ $percent -ge 100 ]; then
+	    percent=5
+	fi
+	if [ $percent -lt 10 ]; then
+	    percent="0$percent"
+	fi
+}
+
+# Prepare the destination
+# No arguments expected
+function prepareDestination(){
+	mkdir -p "$imagePath"
+	# TODO - Ditch 777
+	chmod -R 777 $imagePath
+	rm -Rf "$imagePath/*"
+}
+
+# Expects an NTFS partition
+# $1 is the partition to check [Required]
+# Return codes
+# 0: Unrecogized NTFS
+# 1: Windows Boot Partition
+# 2: Windows System Partition
+# 3: Windows Recovery Parition [Unimplemented]
+function chkWinPart() {
+	local winPart="$1"
+	local rCode=0
+	dots "Mounting $winPart readonly"
+	mkdir /ntfs &>/dev/null
+	mount -o ro $winPart 2>/dev/null
+	if [ -f "/ntfs/bootmgr" ]; then
+		rCode=1
+	else [ -f "/ntfs/pagefile.sys" ] || [ -f "/ntfs/hyberfil.sys" ]; then
+		rCode=2
+	fi
+
+	dots "Unmounting $winPart"
+	umount $winPart 2>/dev/null
+
+	return rCode
+}
+
+# Expects an NTFS partition
+# $1 is the partition to check [Required]
+# Deletes page file and hiberfil.sys from partition
+function remPageFile() {
+	local winPart="$1"
+	dots "Mounting $winPart read-write"
+	mkdir /ntfs &>/dev/null
+	mount -o rw $winPart 2>/dev/null
+	dots "Removing pagefile.sys"
+	if [ -f "/ntfs/pagefile.sys" ]; then
+		rm -f "/ntfs/pagefile.sys" >/dev/null 2>&1
+	fi
+	dots "Removing hiberfil.sys"
+	if [ -f "/ntfs/hyberfil.sys" ]; then
+		rm -f "/ntfs/hiberfil.sys" >/dev/null 2>&1
+	fi
+
+	dots "Unmounting $winPart"
+	umount $winPart 2>/dev/null
+}
+
+# This processes a resizable imaging job
+# No arguments expected
+function adjstPartition() {
+	part=""
+	fixed_size_partitions=""
+
+	# Find fixed-size partitions based on fstype
+	partList=`fogpartinfo --list-parts $hd 2>/dev/null`
+	for part in partList; do
+		fstype=`fsTypeSetting $part`
+		if [ "$fstype" == "extfs" ]; then
+			extfsavail=`expr $extfsavail '+' 1`
+		elif [ "$fstype" == "ntfs" ]; then
+			win7partcnt=`expr $win7partcnt '+' 1`
+			ntfsType=`chkWinPart`
+			# Windows Boot Partition
+			if [ "$ntfsType" == "1" ]; then
+				fixed_size_partitions="${fixed_size_partitions}:$part"
+			# Windows System Partition - Delete PageFile.sys/Hiberfil.sys
+			elif [ "$ntfsType" == "2" ] && [ "$ignorepg" == "1" ]; then
+				remPageFile $part
+			fi
+			# TODO Make Windows Recovery partition fixed
+		else
+			fixed_size_partitions="${fixed_size_partitions}:$part"
+		fi
+	done
+
+	# Only save partition numbers
+	fixed_size_partitions=`echo $fixed_size_partitions | sed 's/[^:0-9]\|^:/g'`
+	echo $fixed_size_partitions > "${imagePath}/d1.fixed_size_partitions"
+	
+	# NOTE: By this phase in the original version of this script, it made sure
+	#       XP started at sector 63. I assume that no one is running XP SP1.
+
+	# Clear partition data as a precaution
+	echo -n "" > "${imagePath}/d1.original.fstypes"
+	echo -n "" > "${imagePath}/d1.original.swapuuids"
+	debugPause
+	
+	# Shrink partitions before cloning
+	for part in $partList; do
+		shrinkPartition "$part" "${imagePath}/d1.original.fstypes"
+	done
+	runPartProbe $hd
+	gptorMBRSave "$hd" "$imagePath"
+	debugPause
+
+	echo -e "\n * Now FOG will attempt to upload the image using Partclone.\n"
+	
+	# Clone partitions
+	diskLength=`expr length $hd`
+	for part in $partList; do
+		mkfifo /tmp/pigz1
+		partNum=${part:$diskLength}
+		echo " * Processing Partition: $part ($partNum)"
+		fstype=`fsTypeSetting $part`
+		if [ "$fstype" != "swap" ]; then
+			# Reset flag on NTFS partitions
+			if [ "$fstype" == "ntfs" ]; then
+				resetFlag "$part"
+			fi
+			echo " * Using partclone.${fstype}"
+			sleep 5
+			imgpart="$imagePath/d1p${partNum}.img"
+			uploadFormat "$cores" "/tmp/pigz1" "$imgpart"
+			partclone.$fstype -c -s $part -O /tmp/pigz1 -N -f 1 2>/tmp/status.fog
+			mv $imgpart.000 $imgpart 2>/dev/null
+			clear
+			echo " * Image uploaded"
+		else
+			echo " * Not uploading swap partition"
+			saveSwapUUID "${imagePath}/d1.original.swapuuids" "$part"
+		fi
+		rm /tmp/pigz1
+		debugPause
+	done
+	dots "Restoring MBR"
+	applySfdiskPartitions "${hd}" "${imagePath}/d1.original.partitions"
+	fdisk $hd &>/dev/null << EOFRESTOREPART
+w
+EOFRESTOREPART
+	echo "Done"
+	debugPause
+
+	# Apply Vista fix if needed
+	if [ "$osid" == "2" ]; then
+		correctVistaMBR $hd
+	fi
+	debugPause
+
+	# Expand partitions to normal
+	for part in $partList; do
+		expandPartition "$part"
+	done
+}
+
+### END FUNCTIONS
+
+updatePercent
+
+fog.statusreporter "$mac" "$web" &
+if [ ! -f "/images/.mntcheck" ]; then
+	handleError "Fatal Error: Failed to mount NFS Volume."
+elif [ -z "$img" ]; then
+	handleError "Fatal Error: Invalid image name."
+else
+	echo -e " * Preparing Image ${img} at ${imagePath}\n"
+	prepareDestintation
+	echo -e " * Looking for Hard Disk"
+	getHardDisk
+	if [ -z "$hd" ]; then
+		handleError "No hard disk found!"
+	fi
+	debugPause
+
+	# Resizable Partition Image Type
+	if [ "$imgType" == "n" ]; then
+		adjstPartition
+									
+	# Multiple Partition - Single Disk
+	elif [ "$imgType" == "mps" ]; then
+		
+	# Multiple Partition - All Disks
+	elif [ "$imgType" == "mpa" ]; then
+		
+	# Raw Image
+	else
+		
+	fi
+fi
