@@ -87,7 +87,7 @@ function remPageFile() {
 
 # This processes a resizable imaging job
 # No arguments expected
-function adjstPartition() {
+function adjstPartSave() {
 	part=""
 	fixed_size_partitions=""
 
@@ -184,7 +184,7 @@ EOFRESTOREPART
 
 # This processes a Multiple Partition Single Disk job
 # No arguments expected
-function mpsPartition() {
+function mpsPartSave() {
 	hasgpt=`hasGPT $hd`
 	if [ "$hasgpt" == "0" ]; then
 		have_extended_partition=`sfdisk -l $hd 2>/dev/null \
@@ -209,7 +209,7 @@ function mpsPartition() {
 
 # This processes a Multiple Partition All Disks job
 # No arguments expected
-function mpaPartition() {
+function mpaPartSave() {
 	diskList=`fogpartinfo --list-devices 2>/dev/null`
 	intDisk=1
 	for disk in $diskList; do
@@ -241,7 +241,7 @@ function mpaPartition() {
 
 # This processes a Raw Partition job
 # No arguments expected
-function rawDisk() {
+function rawDiskSave() {
 	imgpart="${imagePath}/$img"
 	mkfifo /tmp/pigz1
 	uploadFormat "$cores" "/tmp/pigz1" "$imgpart"
@@ -276,10 +276,13 @@ if [ ! -f "/images/.mntcheck" ]; then
 elif [ -z "$img" ]; then
 	handleError "Fatal Error: Invalid image name."
 else
-	echo -e " * Preparing Image ${img} at ${imagePath}\n"
+	debugPause
+	echo -e " * Saving image ${img} at ${imagePath}\n"
 	prepareDestintation
-	echo -e " * Looking for Hard Disk"
+	dots "Looking for Hard Disk"
 	getHardDisk
+	echo "Done"
+
 	if [ -z "$hd" ]; then
 		handleError "No hard disk found!"
 	fi
@@ -287,16 +290,16 @@ else
 
 	# Resizable Partition Image Type
 	if [ "$imgType" == "n" ]; then
-		adjstPartition				
+		adjstPartSave
 	# Multiple Partition - Single Disk
 	elif [ "$imgType" == "mps" ]; then
-		mpsPartition
+		mpsPartSave
 	# Multiple Partition - All Disks
 	elif [ "$imgType" == "mpa" ]; then
-		mpaPartition
+		mpaPartSave
 	# Raw Image
 	else
-		rawDisk
+		rawDiskSave
 	fi
 	# TODO - Ditch 777
 	# Fix permissions on the image directory
