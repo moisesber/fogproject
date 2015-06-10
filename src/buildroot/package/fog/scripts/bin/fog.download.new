@@ -46,7 +46,7 @@ debugPause
 if [ ! -n $hd ]; then
 	handleError "HD is null, no hard disk found."
 fi
-echo "Wiping $hd partition information
+echo "Wiping $hd partition information"
 initHardDisk $hd
 # Generates the partitions.  If singledisk resizeable, it generates
 # based on default normal values.
