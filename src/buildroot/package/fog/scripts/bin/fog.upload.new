@@ -177,6 +177,90 @@ EOFRESTOREPART
 	done
 }
 
+# This processes a Multiple Partition Single Disk job
+# No arguments expected
+function mpsPartition() {
+	hasgpt=`hasGPT $hd`
+	if [ "$hasgpt" == "0" ]; then
+		have_extended_partition=`sfdisk -l $hd 2>/dev/null \
+			| egrep "^${hd}.*(Extended|W95 Ext'd \(LBA\))$" | wc -l`
+	else
+		have_extended_partition="0"
+	fi
+	if [ ! -d "$imagePath" ]; then
+		handleError "Unable to create $imagePath"
+	else
+		savePartitionTablesAndBootLoaders "$hd" "1" "$imagePath" "$osid" "$hasgpt" "$have_extended_partition" "$imgPartitionType"
+		debugPause
+		partList=`fogpartinfo --list-parts $hd 2>/dev/null`
+		diskLength=`expr length $hd`
+		for part in $partList; do
+			savePartition "$part" "1" "$imagePath" "$diskLength" "$cores" "$imgPartitionType"
+			debugPause
+		done
+		echo " * Task complete!"
+	fi
+}
+
+# This processes a Multiple Partition All Disks job
+# No arguments expected
+function mpaPartition() {
+	diskList=`fogpartinfo --list-devices 2>/dev/null`
+	intDisk=1
+	for disk in $diskList; do
+	echo " * Processing Hard Disk: $disk"
+	hasgpt=`hasGPT $disk`
+	if [ "$hasgpt" == "0" ]; then
+		have_extended_partition=`sfdisk -l $disk 2>/dev/null \
+			| egrep "^${disk}.*(Extended|W95 Ext'd \(LBA\))$" | wc -l`
+	else
+		have_extended_partition="0";
+	fi
+	if [ ! -d "$imagePath" ]; then
+		handleError "Unable to create $imagePath";
+	else
+		savePartitionTablesAndBootLoaders "$disk" "$intDisk" "$imagePath" "$osid" "$hasgpt" "$have_extended_partition" "$imgPartitionType"
+		debugPause
+		partList=`fogpartinfo --list-parts $disk 2>/dev/null`;
+		diskLength=`expr length $disk`;
+		for part in $parts; do
+			savePartition "$part" "$intDisk" "$imagePath" "$diskLength" "$cores" "$imgPartitionType"
+			debugPause;
+		done
+	fi
+	echo " * Disk $disk complete!";
+	intDisk=`expr $intDisk '+' 1`;
+	debugPause;
+	done
+}
+
+# This processes a Raw Partition job
+# No arguments expected
+function rawDisk() {
+	imgpart="${imagePath}/$img"
+	mkfifo /tmp/pigz1
+	uploadFormat "$cores" "/tmp/pigz1" "$imgpart"
+	partclone.imager -c -s $hd -O /tmp/pigz1 -N -f 1 2>/tmp/status.fog
+	rm /tmp/pigz1
+	clear
+}
+
+# This sends the final signals back to the server at the end of the job
+# No arguments expected
+function sendEndJob() {
+	queueinfo="";
+	if [[ "$osid" == +([5-7]|9) ]]; then
+		imgType="mps"
+	fi
+	post="http://${web}service/Post_Stage2.php?to=$img&mac=$mac&ftp=$ftp&size=$size&imgid=$imgid&imgtype=$imgType&osid=$osid&type=$type"
+	queueinfo=`wget -q -O - "$post" 2>/dev/null`
+	while [ "$queueinfo" != "##" ]; do
+		echo "      * $queueinfo"
+		queueinfo=`wget -q -O - "$post" 2>/dev/null`
+		sleep 5
+	done
+}
+
 ### END FUNCTIONS
 
 updatePercent
@@ -198,16 +282,19 @@ else
 
 	# Resizable Partition Image Type
 	if [ "$imgType" == "n" ]; then
-		adjstPartition
-									
+		adjstPartition				
 	# Multiple Partition - Single Disk
 	elif [ "$imgType" == "mps" ]; then
-		
+		mpsPartition
 	# Multiple Partition - All Disks
 	elif [ "$imgType" == "mpa" ]; then
-		
+		mpaPartition
 	# Raw Image
 	else
-		
+		rawDisk
 	fi
+	# TODO - Ditch 777
+	# Fix permissions on the image directory
+	chmod -R 777 $imagePath
+	sendEndJob
 fi
