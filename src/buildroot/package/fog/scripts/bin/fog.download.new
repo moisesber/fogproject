@@ -1,21 +1,26 @@
 #!/bin/bash
 
+# SCRIPT NAME: fog.download
+# SCRIPT DESCRIPTION: Downloads image from server to the client
+
 ### BEGIN FUNCTION INCLUDES
-if [ -z "$FUNCS_SH" ]; then
-	. /usr/share/fog/lib/funcs.sh;
-fi
-if [ -z "$UI_SH" ]; then
-	. /usr/share/fog/lib/ui.sh
-fi
+. /usr/share/fog/lib/funcs.sh;
 . /bin/fog.donate;
 . /bin/fog.checkin;
-### END FUNCTION INCLUDES
+### BEGIN FUNCTION INCLUDES
 
+### BEGIN VARIABLES
 layPartSize="-1s";
 imagePath="/images/$img";
 fog.statusreporter "$mac" "$web" &
 statusReporter="$!";
 fixed_size_partitions="";
+### END VARIABLES
+
+### BEGIN FUNCTIONS
+
+### END FUNCTIONS
+
 dots "Checking Mounted File System";
 if [ ! -f "/images/.mntcheck" ]; then
 	handleError "Fatal Error: Failed to mount NFS Volume.\n* If you believe the filesystem is mounted,\n\tmake sure you have a file called .mntcheck\n\tin the directory you are mounting on the server";
@@ -47,10 +52,13 @@ if [ "$imgType" == "n" ]; then
 	win7partcnt="0";
 	win7rec="";
 	win7sys="";
-	if [ -f "$win7imgroot/sys.img.000" ] || grep -q "sys.img.000" /tmp/filelist.txt &>/dev/null ; then
+	if [ -f "$win7imgroot/sys.img.000" ] || \
+		grep -q "sys.img.000" /tmp/filelist.txt &>/dev/null; then
+		# Windows Vista+
 		if [[ "$osid" == +([5-7]|9) ]]; then
 			dots "Windows Boot Partition Exists";
-			if [ -f "$win7imgroot/rec.img.000" ] || grep -q "rec.img.000" /tmp/filelist.txt &>/dev/null ; then
+			if [ -f "$win7imgroot/rec.img.000" ] || \
+				grep -q "rec.img.000" /tmp/filelist.txt &>/dev/null; then
 				echo "Yes";
 				win7partcnt="2";
 				win7rec="${hd}1";
@@ -59,7 +67,8 @@ if [ "$imgType" == "n" ]; then
 				downloadPartition="${hd}3";
 				partCount="2";
 				downloadPartitionCount="3";
-			elif [ -f "$win7imgroot/gpt.bak" ] || grep -q "gpt.bak" /tmp/filelist.txt &>/dev/null ; then
+			elif [ -f "$win7imgroot/gpt.bak" ] || \
+				grep -q "gpt.bak" /tmp/filelist.txt &>/dev/null; then
 				echo "Yes";
 				win7partcnt="3";
 				win7rec="gpt";
