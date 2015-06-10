@@ -1067,7 +1067,7 @@ EOF
 }
 
 # Provides an error banner and ensures that any shrunken partitions are
-# returned to normal size
+# returned to normal size and reboots after one minute
 # $1: Error string input to display [Recommended]
 handleError() {
 	handleErrorTopUI $1
@@ -1082,4 +1082,7 @@ handleError() {
 	fi
 
 	handleErrorBotUI
+	sleep 60
+	debugPause
+	exit 1
 }
