@@ -1,7 +1,16 @@
 #!/bin/bash
-. /usr/share/fog/lib/funcs.sh
+
+### BEGIN FUNCTION INCLUDES
+if [ -z "$FUNCS_SH" ]; then
+	. /usr/share/fog/lib/funcs.sh;
+fi
+if [ -z "$UI_SH" ]; then
+	. /usr/share/fog/lib/ui.sh
+fi
 . /bin/fog.donate
 . /bin/fog.checkin
+### END FUNCTION INCLUDES
+
 clearScreen
 displayBanner
 hd=""

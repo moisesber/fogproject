@@ -1,5 +1,11 @@
 #!/bin/bash
-. /usr/share/fog/lib/funcs.sh;
+
+### BEGIN FUNCTION INCLUDES
+if [ -z "$FUNCS_SH" ]; then
+	. /usr/share/fog/lib/funcs.sh;
+fi
+### END FUNCTION INCLUDES
+
 if [ "$type" == "down" ]; then
 	fog.download;
 elif [ "$type" == "up" ]; then

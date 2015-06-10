@@ -1,5 +1,18 @@
 #!/bin/bash
-. /usr/share/fog/lib/partition-funcs.sh;
+
+### BEGIN FUNCTION INCLUDES
+if [ -z "$UI_SH" ]; then
+	. /usr/share/fog/lib/ui.sh
+fi
+if [ -z "$PARTITION_FUNCS_SH" ]; then
+	. /usr/share/fog/lib/partition-funcs.sh
+fi
+### END FUNCTION INCLUDES
+
+### BEGIN VARIABLES
+# Used to detect if functions are loaded
+FUNCS_SH="true"
+
 REG_LOCAL_MACHINE_XP="/ntfs/WINDOWS/system32/config/system"
 REG_LOCAL_MACHINE_7="/ntfs/Windows/System32/config/SYSTEM"
 REG_HOSTNAME_KEY1_XP="\ControlSet001\Services\Tcpip\Parameters\NV Hostname"
@@ -13,25 +26,19 @@ REG_HOSTNAME_KEY3_7="\ControlSet001\Control\ComputerName\ComputerName\ComputerNa
 REG_HOSTNAME_KEY4_7="\ControlSet001\services\Tcpip\Parameters\NV Hostname"
 REG_HOSTNAME_KEY5_7="\ControlSet001\services\Tcpip\Parameters\Hostname"
 REG_HOSTNAME_MOUNTED_DEVICES_7="\MountedDevices"
+### END VARIABLES
+
+### BEGIN ENVIRONMENT SETUP
 #If a sub shell gets involked and we lose kernel vars this will reimport them
 $(for var in $(cat /proc/cmdline); do echo export $var | grep =; done)
-dots() {
-    max=45
-    if [ -n "$1" ]; then
-		n=`expr $max - ${#1}`
-		echo -n " * ${1:0:max}"
-		if [ "$n" -gt 0 ]; then
-			for i in $(seq $n); do
-				printf %s .
-			done
-		fi
-	fi
-}
+### END ENVIRONMENT SETUP
+
 # Get All Active MAC Addresses
 getMACAddresses() {
 	local lomac="00:00:00:00:00:00"
 	echo `cat /sys/class/net/*/address | grep -v $lomac | tr '\n' '|' | sed s/.$//g`;
 }
+
 # $1 is the drive
 enableWriteCache()  {
 	if [ -n "$1" ]; then
@@ -48,6 +55,7 @@ enableWriteCache()  {
 		debugPause;
 	fi
 }
+
 # $1 is the partition
 expandPartition() {
 	if [ ! -n "$1" ]; then
@@ -87,6 +95,7 @@ EOFNTFSRESTORE
 		resetFlag "$1";
 	fi
 }
+
 # $1 is the partition
 fsTypeSetting() {
 	fstype=`blkid -po udev $1 | awk -F= /FS_TYPE=/'{print $2}'`;
@@ -105,10 +114,12 @@ fsTypeSetting() {
 		echo "imager";
 	fi
 }
+
 # $1 is the partition
 getPartType() {
 	echo `blkid -po udev $1 | awk -F'=' /PART_ENTRY_TYPE/'{print $2}'`;
 }
+
 # $1 is the partition
 # Returns the size in bytes.
 getPartSize() {
@@ -116,18 +127,21 @@ getPartSize() {
 	part_block_size=`blockdev --getpbsz $1`;
 	echo `awk "BEGIN{print $block_part_tot * $part_block_size}"`;
 }
+
 # Returns the size in bytes.
 getDiskSize() {
 	block_disk_tot=`blockdev --getsz $hd`;
 	disk_block_size=`blockdev --getpbsz $hd`;
 	echo `awk "BEGIN{print $block_disk_tot * $disk_block_size}"`;
 }
+
 validResizeOS() {
 	#Valid OSID's are 1 XP, 2 Vista, 5 Win 7, 6 Win 8, 7 Win 8.1, and 50 Linux
 	if [[ "$osid" != +([1-2]|[5-7]|9|50) ]]; then
 		handleError " * Invalid operating system id: $osname ($osid)!";
 	fi
 }
+
 # $1 is the partition
 # $2 is the fstypes file location
 shrinkPartition() {
@@ -259,6 +273,7 @@ FORCEY
 		debugPause;
 	fi
 }
+
 # $1 is the part
 resetFlag() {
 	if [ -n "$1" ]; then
@@ -271,6 +286,7 @@ resetFlag() {
 		fi
 	fi
 }
+
 # $1 is the disk
 countNtfs() {
 	local count=0;
@@ -288,6 +304,7 @@ countNtfs() {
 	fi
 	echo $count;
 }
+
 # $1 is the disk
 countExtfs() {
 	local count=0;
@@ -332,6 +349,7 @@ writeImage()  {
 	fi
 	rm /tmp/pigz1;
 }
+
 # $1 = DriveName  (e.g. /dev/sdb)
 # $2 = DriveNumber  (e.g. 1)
 # $3 = ImagePath  (e.g. /net/foo)
@@ -354,6 +372,7 @@ getValidRestorePartitions() {
 	done
 	echo $valid_parts;
 }
+
 # $1 = DriveName  (e.g. /dev/sdb)
 # $2 = DriveNumber  (e.g. 1)
 # $3 = ImagePath  (e.g. /net/foo)
@@ -375,6 +394,7 @@ makeAllSwapSystems() {
 	done
 	runPartprobe "$drive";
 }
+
 changeHostname() {
 	if [ "$hostearly" == "1" ]; then
 		dots "Changing hostname";
@@ -417,6 +437,7 @@ EOFREG
 		debugPause;
 	fi
 }
+
 fixWin7boot() {
 	local fstype=`fsTypeSetting $1`;
 	if [[ "$osid" == +([5-7]|9) ]]; then
@@ -439,6 +460,7 @@ fixWin7boot() {
 	fi
 	debugPause;
 }
+
 clearMountedDevices() {
 	mkdir /ntfs &>/dev/null
 	if [[ "$osid" == +([5-7]|9) ]]; then
@@ -464,6 +486,7 @@ EOFMOUNT
 		debugPause;
 	fi
 }
+
 # $1 is the device name of the windows system partition
 removePageFile() {
 	local part="$1";
@@ -505,6 +528,7 @@ removePageFile() {
 		fi
 	fi
 }
+
 doInventory() {
 	sysman=`dmidecode -s system-manufacturer`;
 	sysproduct=`dmidecode -s system-product-name`;
@@ -553,6 +577,7 @@ doInventory() {
 	caseserial64=`echo $caseserial | base64`;
 	casesasset64=`echo $casesasset | base64`;	
 }
+
 determineOS() {
 	if [ -n "$1" ]; then
 		if [ "$1" = "1" ]; then
@@ -598,31 +623,7 @@ determineOS() {
 		handleError " * Unable to determine operating system type!";
 	fi
 }
-clearScreen() {
-	if [ "$mode" != "debug" ]; then
-		for i in $(seq 0 99); do
-			echo "";
-		done
-	fi
-}
-sec2String() {
-	if [ $1 -gt 60 ]; then
-		if [ $1 -gt 3600 ]; then
-			if [ $1 -gt 216000 ]; then
-				val=$(expr $1 "/" 216000);
-				echo -n "$val days";
-			else
-				val=$(expr $1 "/" 3600);
-				echo -n "$val hours";
-			fi
-		else
-			val=$(expr $1 "/" 60);
-			echo -n "$val min";
-		fi
-	else
-		echo -n "$1 sec";
-	fi
-}
+
 getSAMLoc() {
 	poss="/ntfs/WINDOWS/system32/config/SAM /ntfs/Windows/System32/config/SAM";
 	for pth in $poss; do
@@ -633,6 +634,7 @@ getSAMLoc() {
 	done
 	return 0;
 }
+
 # $1 is the partition to search for.
 getPartitionCount() {
 	echo `lsblk -pno KNAME ${1}|wc -l`;
@@ -699,89 +701,7 @@ correctVistaMBR() {
 	echo "Done";
 	debugPause;
 }
-displayBanner() {
-	version=`wget -q -O - http://${web}service/getversion.php`;
-	echo "  +--------------------------------------------------------------------------+";
-	echo "                                                                            ";
-	echo "                         ..#######:.    ..,#,..     .::##::.                ";
-	echo "                    .:######          .:;####:......;#;..                   ";
-	echo "                    ...##...        ...##;,;##::::.##...                    ";
-	echo "                       ,#          ...##.....##:::##     ..::               ";
-	echo "                       ##    .::###,,##.   . ##.::#.:######::.              ";
-	echo "                    ...##:::###::....#. ..  .#...#. #...#:::.               ";
-	echo "                    ..:####:..    ..##......##::##  ..  #                   ";
-	echo "                        #  .      ...##:,;##;:::#: ... ##..                 ";
-	echo "                       .#  .       .:;####;::::.##:::;#:..                  ";
-	echo "                        #                     ..:;###..                     ";
-	echo "                                                                            ";
-	echo "                         Free Computer Imaging Solution                     ";
-	echo "                                 Version $version                              ";
-	echo "                                                                            ";
-	echo "  +--------------------------------------------------------------------------+";
-	echo "   Credits:                                                                 ";
-	echo "   http://fogproject.org/Credits";
-	echo "   Released under GPL Version 3                                             ";
-	echo "  +--------------------------------------------------------------------------+";
-	echo "";
-	echo "";
-}
-handleError() {
-    echo "";
-	echo " #############################################################################";
-	echo " #                                                                           #";	
-	echo " #                     An error has been detected!                           #";
-	echo " #                                                                           #";	
-	echo " #############################################################################";
-	echo "";
-	echo "";
-	echo -e " $1";
-	echo "";
-	echo "";
-	#
-	# expand the file systems in the restored partitions
-	#
-	# Windows 7, 8, 8.1:
-	# Windows 2000/XP, Vista:
-	# Linux:
-	if [ "$2" == "yes" ]; then
-		if [[ "$osid" == +([1-2]|[5-7]|9|50) ]]; then
-			parts=`fogpartinfo --list-parts $hd 2>/dev/null`;
-			for part in $parts; do
-				expandPartition "$part";
-			done
-		fi
-	fi
-	echo "";
-	echo "";
-	echo " #############################################################################";
-	echo " #                                                                           #";	
-	echo " #                  Computer will reboot in 1 minute.                        #";
-	echo " #                                                                           #";	
-	echo " #############################################################################";	
-	sleep 60;
-	debugPause;
-	exit 0;
-}
-handleWarning() {
-    echo "";
-	echo " #############################################################################";
-	echo " #                                                                           #";	
-	echo " #                     A warning has been detected!                           #";
-	echo " #                                                                           #";	
-	echo " #############################################################################";
-	echo "";
-	echo "";
-	echo -e " $1";
-	echo "";
-	echo "";
-	echo " #############################################################################";
-	echo " #                                                                           #";	
-	echo " #                  Will continue in 1 minute.                               #";
-	echo " #                                                                           #";	
-	echo " #############################################################################";	
-	sleep 60;
-	debugPause;
-}
+
 # $1 is the drive
 runPartprobe() {
 	udevadm settle
@@ -790,6 +710,7 @@ runPartprobe() {
 		handleError "Failed to read back partitions";
 	fi
 }
+
 debugCommand() {
 	if [ "$mode" == "debug" ]; then
 		echo $1 >> /tmp/cmdlist;
@@ -824,6 +745,7 @@ uploadFormat() {
 		fi
 	fi
 }
+
 # Thank you, fractal13 Code Base
 #
 # Save enough MBR and embedding area to capture all of GRUB
@@ -858,6 +780,7 @@ saveGRUB() {
 	fi
 	dd if="$disk" of="$imagePath/d${disk_number}.mbr" count="${count}" bs=512 &>/dev/null;
 }
+
 # Checks for the existence of the grub embedding area in the image directory.
 # Echos 1 for true, and 0 for false.
 #
@@ -875,6 +798,7 @@ hasGRUB() {
 		echo "0";
 	fi
 }
+
 # Restore the grub boot record and all of the embedding area data
 # necessary for grub2.
 #
@@ -894,12 +818,7 @@ restoreGRUB() {
 	dd if="${tmpMBR}" of="${disk}" bs=512 count="${count}" &>/dev/null;
 	runPartprobe "$disk";
 }
-debugPause() {
-	if [ -n "$isdebug" -o "$mode" == "debug" ]; then
-		echo 'Press [Enter] key to continue.';
-		read -p "$*";
-	fi
-}
+
 savePartitionTablesAndBootLoaders() {
 	local disk="$1";
 	local intDisk="$2";
@@ -933,6 +852,7 @@ savePartitionTablesAndBootLoaders() {
 	echo "Done";
 	debugPause;
 }
+
 clearPartitionTables() {
 	local disk=$1;
 	dots "Erasing current MBR/GPT Tables";
@@ -940,6 +860,7 @@ clearPartitionTables() {
 	echo "Done";
 	debugPause;
 }
+
 restorePartitionTablesAndBootLoaders() {
 	local disk="$1";
 	local intDisk="$2";
@@ -991,6 +912,7 @@ restorePartitionTablesAndBootLoaders() {
 		debugPause;
 	fi
 }
+
 savePartition() {
 	local part="$1";
 	local intDisk="$2";
@@ -1034,6 +956,7 @@ savePartition() {
 		debugPause;
 	fi
 }
+
 restorePartition() {
 	if [ -z "$1" ]; then
 		handleError "No partition sent to process";
@@ -1101,6 +1024,7 @@ restorePartition() {
 		debugPause;
 	fi
 }
+
 gptorMBRSave() {
 	runPartprobe $1;
 	local gptormbr=`gdisk -l $1 | awk /^\ *GPT:/'{print $2}'`;
@@ -1123,6 +1047,7 @@ gptorMBRSave() {
 		fi
 	fi
 }
+
 runFixparts() {
 	dots "Attempting fixparts";
 	fixparts $1 << EOF
@@ -1133,16 +1058,28 @@ EOF
 	if [ "$?" != 0 ]; then
 		echo "Failed";
 		debugPause;
-		handleError "Could not fix partition layout" "yes";
+		handleError "Could not fix partition layout";
 	else
 		runPartprobe "$1";
 		echo "Done";
 		debugPause;
 	fi
 }
-# Local Variables:
-# indent-tabs-mode: t
-# sh-basic-offset: 4
-# sh-indentation: 4
-# tab-width: 4
-# End:
+
+# Provides an error banner and ensures that any shrunken partitions are
+# returned to normal size
+# $1: Error string input to display [Recommended]
+handleError() {
+	handleErrorTopUI $1
+
+	# Unshrink partitions if this was from a resizable upload job	
+	# TODO - May need to check to see if partition was shrunk first
+	if [ "$type" == "upload" ] && [ "$imgType" == "n" ]; then
+		parts=`fogpartinfo --list-parts $hd 2>/dev/null`;
+		for part in $parts; do
+			expandPartition "$part";
+		done
+	fi
+
+	handleErrorBotUI
+}

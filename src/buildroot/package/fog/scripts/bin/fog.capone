@@ -1,6 +1,15 @@
 #!/bin/bash
-. /usr/share/fog/lib/funcs.sh;
+
+### BEGIN FUNCTION INCLUDES
+if [ -z "$FUNCS_SH" ]; then
+	. /usr/share/fog/lib/funcs.sh;
+fi
+if [ -z "$UI_SH" ]; then
+	. /usr/share/fog/lib/ui.sh
+fi
 . /bin/fog.donate;
+### END FUNCTION INCLUDES
+
 for arg in `cat /proc/cmdline`; do
     case "$arg" in
 	initsh)
@@ -10,6 +19,7 @@ for arg in `cat /proc/cmdline`; do
 	    ;;
     esac
 done
+
 lookAtMe()
 {
 	while true; do
