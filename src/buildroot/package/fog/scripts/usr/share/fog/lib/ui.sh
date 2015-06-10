@@ -96,9 +96,6 @@ handleErrorBotUI() {
 	echo " #                  Computer will reboot in 1 minute.                        #"
 	echo "$borderE"
 	echo "$borderTB"
-	sleep 60
-	debugPause
-	exit 0
 }
 
 # Displays a warning banner with an optional message
