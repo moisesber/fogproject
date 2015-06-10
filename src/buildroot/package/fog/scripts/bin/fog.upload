@@ -4,7 +4,12 @@
 # SCRIPT DESCRIPTION: Uploads image found on the client to the server
 
 ### BEGIN FUNCTION INCLUDES
-. /usr/share/fog/lib/funcs.sh
+if [ -z "$FUNCS_SH" ]; then
+	. /usr/share/fog/lib/funcs.sh;
+fi
+if [ -z "$UI_SH" ]; then
+	. /usr/share/fog/lib/ui.sh
+fi
 . /bin/fog.checkin
 ### END FUNCTION INCLUDES
 

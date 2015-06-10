@@ -1,13 +1,20 @@
 #!/bin/bash
 
+### BEGIN FUNCTION INCLUDES
+if [ -z "$FUNCS_SH" ]; then
+	. /usr/share/fog/lib/funcs.sh;
+fi
+if [ -z "$UI_SH" ]; then
+	. /usr/share/fog/lib/ui.sh
+fi
+### END FUNCTION INCLUDES
+
 # Make this dynamic from fog. PIGZ_COMP="-9";
 RUN_CHKDSK="";
 HOSTNAME_EARLY="0";
 
 OS_ID_WIN7="5";
 OS_ID_WIN8="6";
-
-. /usr/share/fog/lib/funcs.sh
 
 for arg in `cat /proc/cmdline`; do
     case "$arg" in

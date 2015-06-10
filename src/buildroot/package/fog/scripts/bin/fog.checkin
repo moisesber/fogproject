@@ -1,5 +1,14 @@
 #!/bin/bash
-. /usr/share/fog/lib/funcs.sh
+
+### BEGIN FUNCTION INCLUDES
+if [ -z "$FUNCS_SH" ]; then
+	. /usr/share/fog/lib/funcs.sh;
+fi
+if [ -z "$UI_SH" ]; then
+	. /usr/share/fog/lib/ui.sh
+fi
+### END FUNCTION INCLUDES
+
 RUN_CHKDSK="";
 HOSTNAME_EARLY="0";
 OS_ID_WIN7="5";

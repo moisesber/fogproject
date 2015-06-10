@@ -1,5 +1,16 @@
 #!/bin/bash
 
+### BEGIN FUNCTION INCLUDES
+if [ -z "$UI_SH" ]; then
+	. /usr/share/fog/lib/ui.sh
+fi
+### END FUNCTION INCLUDES
+
+### BEGIN VARIABLES
+# Used to detect if functions are loaded
+PARTITION_FUNCS_SH="true"
+### END VARIABLES
+
 #
 # These functions are for dealing with resizing of partitions.
 # They currently work for MBR and Extended partition tables.
