@@ -24,34 +24,16 @@ fixed_size_partitions=""
 ### END VARIABLES
 
 ### BEGIN FUNCTIONS
+function nfsFail() {
+	local nfsErrorMsg="Fatal Error: Failed to mount NFS Volume at /images.\n"
+	nfsErrorMsg="${nfsErrorMsg} * If you believe the filesystem is mounted,\n"
+	nfsErrorMsg="${nfsErrorMsg}   make sure you have a file called .mntcheck\n"
+	nfsErrorMsg="${nfsErrorMsg}   in the directory you are mounting on the server"
+	handleError "$nfsErrorMsg"
+}
 
-### END FUNCTIONS
-
-dots "Checking Mounted File System"
-if [ ! -f "/images/.mntcheck" ]; then
-	handleError "Fatal Error: Failed to mount NFS Volume.\n* If you believe the filesystem is mounted,\n\tmake sure you have a file called .mntcheck\n\tin the directory you are mounting on the server"
-fi
-win7imgroot="$imagePath"
-echo "Done"
-debugPause
-echo -e "\n * Starting Image Push"
-if [ -z "$img" ]; then
-	handleError "No image specified to download"
-fi
-echo " * Using Image: $img"
-dots "Looking for Hard Disks"
-getHardDisk
-echo "Done"
-debugPause
-if [ ! -n $hd ]; then
-	handleError "HD is null, no hard disk found."
-fi
-echo "Wiping $hd partition information"
-initHardDisk $hd
-# Generates the partitions.  If singledisk resizeable, it generates
-# based on default normal values.
-# Otherwise it uses MBR/GPT to generate the partition table(s).
-if [ "$imgType" == "n" ]; then
+# TODO - Clean-up
+function adjstPartBuild() {
 	validResizeOS
 	enableWriteCache "$hd"
 	part="${hd}1"
@@ -188,27 +170,35 @@ if [ "$imgType" == "n" ]; then
 		debugPause
 	fi
 	sleep 3
-elif [ "$imgType" == "mps" ]; then
-	if [ -d "$imagePath" ]; then
+}
+
+# TODO - Clean-up
+function mpsPartBuild() {
+	if [ ! -d "$imagePath" ]; then
+		handleError "Unable to locate image store."
+	else
 		restorePartitionTablesAndBootLoaders "$hd" "1" "$imagePath" "$osid" "$imgPartitionType"
 		gptcheck="$global_gptcheck"
-	else
-		handleError "Unable to locate image store."
 	fi
-elif [ "$imgType" == "mpa" ]; then
+}
+
+# TODO - Clean-up
+function mpaPartBuild() {
 	disks=`fogpartinfo --list-devices 2>/dev/null`
 	intDisk=1
-	if [ -d "$imagePath" ]; then
+	if [ ! -d "$imagePath" ]; then
+		handleError "Unable to locate image store."
+	else
 		for disk in $disks; do
 			restorePartitionTablesAndBootLoaders "$disk" "$intDisk" "$imagePath" "$osid" "$imgPartitionType"
 			gptcheck="$global_gptcheck"
 			intDisk=`expr $intDisk '+' 1`
 		done
-	else
-		handleError "Unable to locate image store."
 	fi
-fi
-if [ "$imgType" == "n" ]; then
+}
+
+# TODO - Clean-up
+function adjstPartDeploy() {
 	parts=`fogpartinfo --list-parts $hd 2>/dev/null`
 	diskLength=`expr length $hd`
 	if [ -f "$win7imgroot/sys.img.000" ] && [[ "$osid" == +([5-7]|9) ]]; then
@@ -239,14 +229,14 @@ if [ "$imgType" == "n" ]; then
 			fi
 		done
 	fi
-	dots "Stopping FOG Status Reporter"
-	kill -9 $statusReporter 2>/dev/null
-	echo "Done"
 	for part in $parts; do
 		expandPartition "$part"
 		fixWin7boot "$part"
 	done
-elif [ "$imgType" == "mps" ]; then
+}
+
+# TODO - Clean-up
+function mpsPartDeploy() {
 	parts=`getValidRestorePartitions $hd 1 $imagePath`
 	diskLength=`expr length $hd`
 	for part in $parts; do
@@ -261,7 +251,10 @@ elif [ "$imgType" == "mps" ]; then
 	kill -9 $statusReporter 2>/dev/null
 	echo "Done"
 	makeAllSwapSystems "$hd" "1" "$imagePath" "$imgPartitionType"
-elif [ "$imgType" == "mpa" ]; then
+}
+
+# TODO - Clean-up
+function mpaPart() {
 	disks=`fogpartinfo --list-devices 2>/dev/null`
 	intDisk=1
 	for disk in $disks; do
@@ -282,48 +275,107 @@ elif [ "$imgType" == "mpa" ]; then
 	dots "Stopping FOG Status Reporter"
 	kill -9 $statusReporter 2>/dev/null
 	echo "Done"
-else
+}
+
+# TODO - Clean-up
+function rawDiskDeploy() {
 	restorePartition "$hd"
 	dots "Stopping FOG Status Reporter"
 	kill -9 $statusReporter 2>/dev/null
 	echo "Done"
-fi
-if [ "$imgPartitionType" == "all" -o "$imgPartitionType" == "mbr" ]; then
-	if [ "$gptcheck" == "yes" ]; then
-		dots "Randomizing GUIDS"
-		sgdisk -G $hd
-		echo "Done"
-		debugPause
+}
+
+# TODO - Clean-up
+function postDeployJobs() {
+	if [ "$imgPartitionType" == "all" -o "$imgPartitionType" == "mbr" ]; then
+		if [ "$gptcheck" == "yes" ]; then
+			dots "Randomizing GUIDS"
+			sgdisk -G $hd
+			echo "Done"
+			debugPause
+		fi
 	fi
-fi
-if [ -f "/images/postdownloadscripts/fog.postdownload" ]; then
-	postdownpath="/images/postdownloadscripts/"
-	. ${postdownpath}fog.postdownload
-fi
-if [ "$capone" != "1" ]; then
-	if [[ "$osid" == +(1|[5-7]|9) ]]; then
-		parts=`fogpartinfo --list-parts $hd 2>/dev/null`
-		for part in $parts; do
-			fstype=`fsTypeSetting $part`
-			if [ "$fstype" = "ntfs" ]; then
-				changeHostname
-			fi
-		done
+	if [ -f "/images/postdownloadscripts/fog.postdownload" ]; then
+		postdownpath="/images/postdownloadscripts/"
+		. ${postdownpath}fog.postdownload
 	fi
-	echo -e "\n * Updating Computer Database Status\n"
-	cd /tmp
-	queueinfo=""
-	wget -q -O /tmp/co.txt "http://${web}service/Post_Stage3.php?mac=$mac&type=$type" &>/dev/null
-	queueinfo=`cat co.txt`
-	while [ "$queueinfo" != '##' ]; do
-		echo "		* $queueinfo"
-		rm co.txt
+	if [ "$capone" != "1" ]; then
+		if [[ "$osid" == +(1|[5-7]|9) ]]; then
+			parts=`fogpartinfo --list-parts $hd 2>/dev/null`
+			for part in $parts; do
+				fstype=`fsTypeSetting $part`
+				if [ "$fstype" = "ntfs" ]; then
+					changeHostname
+				fi
+			done
+		fi
+		echo -e "\n * Updating Computer Database Status\n"
+		cd /tmp
+		queueinfo=""
+		wget -q -O /tmp/co.txt "http://${web}service/Post_Stage3.php?mac=$mac&type=$type" &>/dev/null
+		queueinfo=`cat co.txt`
+		while [ "$queueinfo" != '##' ]; do
+			echo "		* $queueinfo"
+			rm co.txt
 		wget -q -O /tmp/co.txt "http://${web}service/Post_Stage3.php?mac=$mac&type=$type" &>/dev/null
 		queueinfo=`cat co.txt`
 		sleep 5
-	done
-	echo -e "\n * Database Updated!\n"
+		done
+		echo -e "\n * Database Updated!\n"
+		debugPause
+	fi
+
+}
+
+### END FUNCTIONS
+
+if [ ! -f "/images/.mntcheck" ]; then
+	nfsFail  # NFS Mount failure message
+elif [ -z "$img" ]; then
+	handleError "No image specified to download"
+else
+	debugPause
+	echo -e " * Deploying Image ${img} at ${imagePath}\n"
+	dots "Looking for Hard Disks"
+	getHardDisk
+	echo "Done"
+	if [ -z "$hd" ]; then
+		handleError "HD is null, no hard disk found."
+	fi
+	debugPause
+
+	# TODO BEGIN - Initialize the drive in a better fashion
+	echo "Wiping $hd partition information"
+	initHardDisk $hd
+	# TODO END
+	
+	win7imgroot="$imagePath" # TODO - Find me a home or a grave
+
+### BEGIN DEPLOYING IMAGE
+	# First: Generates the partitions.  If singledisk resizeable, it generates
+	# based on default normal values.
+	# Otherwise it uses MBR/GPT to generate the partition table(s).
+	# Second: It deploys the image to the client
+	# Resizable Partition Image Type
+	if [ "$imgType" == "n" ]; then
+		adjstPartBuild
+		adjstPartDeploy
+	# Multiple Partition - Single Disk
+	elif [ "$imgType" == "mps" ]; then
+		mpsPartBuild
+		mpsPartDeploy
+	# Multiple Partition - All Disks
+	elif [ "$imgType" == "mpa" ]; then
+		mpaPartBuild
+		mpaPartDeploy
+	else
+		rawDiskDeploy
+	fi
+	debugPause
+### END DEPLOYING IMAGE
+
+	postDeployJobs
+
+	echo -e "\n * Task is completed, computer will now restart.\n"
 	debugPause
 fi
-echo -e "\n * Task is completed, computer will now restart.\n"
-debugPause
